@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.svg" alt="Claude Always-On" width="100%"/>
+</p>
+
 # Claude Always-On
 
 Persistent, self-healing [Claude Code](https://docs.anthropic.com/en/docs/claude-code) remote control sessions on a Mac. Accessible from any device — claude.ai, desktop app, or mobile app — 24/7.
