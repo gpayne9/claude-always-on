@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" fill="none">
   <defs>
     <!-- Background gradient -->
     <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
@@ -168,7 +168,7 @@
 
   <!-- ===== Center relay label ===== -->
   <g transform="translate(640, 220)">
-    <rect x="-60" y="-10" width="120" height="20" rx="10" fill="#d97706" opacity="0.15" stroke="#d97706" stroke-width="0.5" opacity="0.3"/>
+    <rect x="-60" y="-10" width="120" height="20" rx="10" fill="#d97706" opacity="0.15" stroke="#d97706" stroke-width="0.5"/>
     <text x="0" y="4" text-anchor="middle" fill="#d97706" font-family="SF Mono, Menlo, monospace" font-size="9" opacity="0.8">api.anthropic.com</text>
   </g>
 
