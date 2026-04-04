@@ -95,6 +95,13 @@ my-api:$HOME/repos/my-api
 my-site:$HOME/repos/my-site
 ```
 
+For your own repos, create a `sessions.local.conf` file (gitignored) which takes priority over `sessions.conf`:
+
+```bash
+cp sessions.conf sessions.local.conf
+nano sessions.local.conf  # add your real repos
+```
+
 The session name is what appears in the **Remote control** dropdown in the Claude app.
 
 After editing, restart:
@@ -135,7 +142,7 @@ The monitor script (`monitor.sh`) runs every 5 minutes via LaunchAgent and check
 - `keepawake` tmux session exists with a live `caffeinate` process
 - Each session in `sessions.conf` has a running tmux session with a live `claude` process
 
-If anything is missing, it runs `start.sh` to recover and sends a macOS notification.
+If anything is missing, it restarts only the affected sessions (not all of them) and sends a macOS notification.
 
 View the log:
 
@@ -167,6 +174,9 @@ The `--simulate` flag temporarily sets `displaysleep 1`, waits 90 seconds for th
 ## Managing Sessions
 
 ```bash
+# Quick status check
+./start.sh --status
+
 # List running sessions
 tmux list-sessions
 
@@ -211,6 +221,28 @@ In practice, the risk is low. The relay is TLS-encrypted, sessions require your 
 
 ## Troubleshooting
 
+### "Remote Control is not yet enabled for your account"
+
+This is almost always caused by environment variables overriding the interactive OAuth token:
+
+```bash
+# Check for interfering env vars
+env | grep -iE "CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY"
+```
+
+If `CLAUDE_CODE_OAUTH_TOKEN` is set (e.g., by another Claude Code session or a CI config), remote control will fail because that token lacks the required `user:sessions:claude_code` scope. The start script unsets these automatically, but if you're testing manually:
+
+```bash
+unset CLAUDE_CODE_OAUTH_TOKEN
+unset ANTHROPIC_API_KEY
+claude remote-control
+```
+
+Other causes:
+- **Stale feature flag cache** — clear it: `rm -f ~/.claude/statsig/statsig.cached.evaluations.*`
+- **Team/Enterprise plans** — an admin must enable remote control at [claude.ai/admin-settings/claude-code](https://claude.ai/admin-settings/claude-code)
+- **API key auth** — remote control requires interactive OAuth (`claude auth login`), not API keys or `setup-token`
+
 ### Sessions not showing in Remote Control dropdown
 
 ```bash
@@ -218,7 +250,7 @@ tmux list-sessions           # are they running?
 tmux attach -t my-project    # check for errors
 ```
 
-If the server shows disconnected, it likely lost network for longer than ~10 minutes. The restart loop will pick it back up within 10 seconds.
+If the server shows disconnected, it likely lost network for longer than ~10 minutes. The restart loop will pick it back up automatically with exponential backoff (10s, 20s, 40s, up to 5 min max). Once a session runs successfully for >60 seconds, the delay resets to 10s.
 
 ### Sessions died after reboot
 

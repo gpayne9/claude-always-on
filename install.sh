@@ -25,9 +25,9 @@ cat > "$LAUNCH_AGENTS_DIR/com.claude.always-on.start.plist" <<EOF
   <key>RunAtLoad</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>/tmp/claude-always-on-start.log</string>
+  <string>${HOME}/Library/Logs/claude-always-on-start.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/claude-always-on-start.log</string>
+  <string>${HOME}/Library/Logs/claude-always-on-start.log</string>
 </dict>
 </plist>
 EOF
@@ -52,9 +52,9 @@ cat > "$LAUNCH_AGENTS_DIR/com.claude.always-on.monitor.plist" <<EOF
   <key>RunAtLoad</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>/tmp/claude-always-on-monitor.log</string>
+  <string>${HOME}/Library/Logs/claude-always-on-monitor.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/claude-always-on-monitor.log</string>
+  <string>${HOME}/Library/Logs/claude-always-on-monitor.log</string>
   <key>ProcessType</key>
   <string>Background</string>
 </dict>
