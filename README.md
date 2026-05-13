@@ -4,7 +4,7 @@
 
 # Claude Always-On
 
-Persistent, self-healing [Claude Code](https://docs.anthropic.com/en/docs/claude-code) remote control sessions on a Mac. Accessible from any device — claude.ai, desktop app, or mobile app — 24/7.
+Persistent, self-healing [Claude Code](https://code.claude.com/docs/en/overview) remote control sessions on a Mac. Accessible from any device — claude.ai, desktop app, or mobile app — 24/7.
 
 Each repo gets a dedicated `claude remote-control` server running inside a tmux session with an automatic restart loop. A health monitor checks every 5 minutes and recovers anything that died. LaunchAgents start everything on login so it survives reboots.
 
@@ -36,7 +36,7 @@ The protocol is **outbound-only HTTPS** through Anthropic's relay at `api.anthro
 
 ### Prerequisites
 
-- macOS with [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated (`claude login`)
+- macOS with [Claude Code CLI](https://code.claude.com/docs/en/overview) installed and authenticated (`claude login`)
 - tmux (`brew install tmux`)
 - Claude Pro, Max, Team, or Enterprise plan
 - Claude Code v2.1.51+
@@ -221,27 +221,59 @@ In practice, the risk is low. The relay is TLS-encrypted, sessions require your 
 
 ## Troubleshooting
 
-### "Remote Control is not yet enabled for your account"
+### "Remote Control requires a full-scope login token"
 
-This is almost always caused by environment variables overriding the interactive OAuth token:
+`CLAUDE_CODE_OAUTH_TOKEN` is set (often by another Claude Code session or a CI config). These tokens are inference-only and can't establish remote control sessions. The same applies to tokens minted by `claude setup-token`.
 
-```bash
-# Check for interfering env vars
-env | grep -iE "CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY"
-```
-
-If `CLAUDE_CODE_OAUTH_TOKEN` is set (e.g., by another Claude Code session or a CI config), remote control will fail because that token lacks the required `user:sessions:claude_code` scope. The start script unsets these automatically, but if you're testing manually:
+`start.sh` and `monitor.sh` unset this automatically. If testing manually:
 
 ```bash
 unset CLAUDE_CODE_OAUTH_TOKEN
-unset ANTHROPIC_API_KEY
-claude remote-control
+claude auth login
 ```
 
-Other causes:
-- **Stale feature flag cache** — clear it: `rm -f ~/.claude/statsig/statsig.cached.evaluations.*`
-- **Team/Enterprise plans** — an admin must enable remote control at [claude.ai/admin-settings/claude-code](https://claude.ai/admin-settings/claude-code)
-- **API key auth** — remote control requires interactive OAuth (`claude auth login`), not API keys or `setup-token`
+### "Remote Control requires a claude.ai subscription"
+
+`ANTHROPIC_API_KEY` is set, or you're not signed in. API keys aren't supported for remote control.
+
+```bash
+unset ANTHROPIC_API_KEY
+claude auth login    # choose the claude.ai option
+```
+
+### "Remote Control is not yet enabled for your account"
+
+Triggered by one of these environment variables:
+
+- `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` or `DISABLE_TELEMETRY` — unset them
+- `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, or `CLAUDE_CODE_USE_FOUNDRY` — remote control doesn't support third-party providers
+
+If none are set, refresh your session from inside Claude Code:
+
+```text
+/logout
+/login
+```
+
+A community workaround that's no longer in the official docs but sometimes still helps — clearing the cached feature flags:
+
+```bash
+rm -f ~/.claude/statsig/statsig.cached.evaluations.*
+```
+
+### "Unable to determine your organization for Remote Control eligibility"
+
+Cached account info is stale. Re-authenticate:
+
+```bash
+claude auth login
+```
+
+### "Remote Control is disabled by your organization's policy"
+
+On **Team or Enterprise plans**, an admin must enable remote control at [claude.ai/admin-settings/claude-code](https://claude.ai/admin-settings/claude-code). If the toggle is grayed out, the org has a data-retention or compliance config incompatible with remote control — contact Anthropic support.
+
+If the error mentions `disableRemoteControl`, an IT admin has blocked it at the device level via managed settings.
 
 ### Sessions not showing in Remote Control dropdown
 
