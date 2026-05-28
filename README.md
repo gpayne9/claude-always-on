@@ -219,6 +219,15 @@ In practice, the risk is low. The relay is TLS-encrypted, sessions require your 
 | **CPU** | Negligible when idle |
 | **Network** | Minimal polling traffic (~few KB every 2–5s per session) |
 
+## Usage Limits & Billing
+
+> [!IMPORTANT]
+> **A billing change lands June 15, 2026 that may affect this setup.** Per the [official headless docs](https://code.claude.com/docs/en/headless): *"Starting June 15, 2026, Agent SDK and `claude -p` usage on subscription plans will draw from a new monthly Agent SDK credit, separate from your interactive usage limits."*
+>
+> Why it matters here: each session spawned by `claude remote-control` runs as a `claude --print` (`-p`) child process under the hood. It is **not yet officially documented** whether remote-control sessions will be metered against this new Agent SDK credit after June 15. If they are, running several always-on sessions could draw down that credit faster than expected.
+>
+> This is an open question — track [anthropics/claude-code#59823](https://github.com/anthropics/claude-code/issues/59823) and the [Agent SDK plan article](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) for an official answer before relying on this setup heavily.
+
 ## Troubleshooting
 
 ### "Remote Control requires a full-scope login token"
