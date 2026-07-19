@@ -106,7 +106,7 @@ cp sessions.conf sessions.local.conf
 nano sessions.local.conf  # add your real repos
 ```
 
-The session name is what appears in the **Remote control** dropdown in the Claude app.
+The session name is what appears in the **Remote control** dropdown in the Claude app. To make these easy to spot among other sessions, add an optional `prefix=` line — e.g. `prefix=always-on` shows them as "always-on my-project" in the dropdown while tmux session names stay short (`tmux attach -t my-project`).
 
 After editing, restart:
 

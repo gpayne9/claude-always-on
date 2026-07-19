@@ -14,6 +14,10 @@ source "$SCRIPT_DIR/lib.sh"
 
 NAME="$1"
 REPO_PATH="$2"
+# Display name (Remote Control dropdown) = optional conf prefix + name.
+read_sessions
+DISPLAY_NAME="$NAME"
+[ -n "$DISPLAY_PREFIX" ] && DISPLAY_NAME="$DISPLAY_PREFIX $NAME"
 SESSION_LOG="$LOG_DIR/$NAME.log"
 AUTH_STATE="$STATE_DIR/$NAME.auth-failed"
 NOTIFY_MARKER="$STATE_DIR/$NAME.notified"
@@ -27,8 +31,14 @@ while true; do
   mark_line=0
   [ -f "$SESSION_LOG" ] && mark_line=$(wc -l < "$SESSION_LOG")
   start_ts=$(date +%s)
-  "$CLAUDE_BIN" remote-control --name "$NAME" --spawn same-dir 2>>"$SESSION_LOG"
+  # Clear failure state 60s INTO the run, not just after it — a healthy
+  # server can run for days without exiting, and a stale auth flag would
+  # keep the monitor sending false "re-login needed" notifications.
+  ( sleep 60 && rm -f "$AUTH_STATE" "$NOTIFY_MARKER" ) &
+  watchdog=$!
+  "$CLAUDE_BIN" remote-control --name "$DISPLAY_NAME" --spawn same-dir 2>>"$SESSION_LOG"
   elapsed=$(( $(date +%s) - start_ts ))
+  kill "$watchdog" 2>/dev/null
 
   if [ "$elapsed" -gt 60 ]; then
     # Healthy run: reset backoff, clear auth state and the monitor's

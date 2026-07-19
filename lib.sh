@@ -33,13 +33,21 @@ find_tmux() {
   return 1
 }
 
-# Populates SESSION_NAMES/SESSION_PATHS from $CONF. Skips comments/blanks.
+# Populates SESSION_NAMES/SESSION_PATHS (and DISPLAY_PREFIX) from $CONF.
+# Skips comments/blanks. A "prefix=<text>" line sets a display-name prefix
+# shown in the Remote Control dropdown (tmux session names stay unprefixed).
 read_sessions() {
   SESSION_NAMES=()
   SESSION_PATHS=()
+  DISPLAY_PREFIX=""
   local line name raw_path
   while IFS= read -r line; do
     [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+    if [[ "$line" == prefix=* ]]; then
+      DISPLAY_PREFIX="${line#prefix=}"
+      continue
+    fi
+    [[ "$line" != *:* ]] && continue  # not a name:path line
     name="${line%%:*}"
     raw_path="${line#*:}"
     SESSION_NAMES+=("$name")
