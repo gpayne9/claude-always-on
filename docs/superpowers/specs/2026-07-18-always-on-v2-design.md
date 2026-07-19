@@ -70,14 +70,16 @@ Shared helpers used by `start.sh`, `monitor.sh`, `run-session.sh`, `test.sh`:
   `claude remote-control --name <name> --spawn same-dir` with stderr
   appended to `~/Library/Logs/claude-always-on/<name>.log` (stdout stays on
   the TTY so the server's interactive UI is unaffected).
-- Exponential backoff exactly as v1: start 10s, double on fast exit (<60s
+- Exponential backoff exactly as v1: start 10s, double on fast exit (≤60s
   uptime), cap 300s, reset to 10s after a run lasting >60s.
 - **Auth detection:** after each claude exit, scan the last ~50 log lines
   written during that run for auth-failure patterns
   (`Authentication failed`, `401`, `/login`, `Invalid authentication`,
   case-insensitive). On match: touch state file
   `<state-dir>/<name>.auth-failed` and pin delay at 300s. On any run lasting
-  >60s: remove the state file (recovered).
+  >60s: remove the state file and the monitor's notify-marker for this
+  session (recovered — a future auth failure should notify immediately, not
+  be suppressed by a stale 6-hour window).
   - *Implementation caveat:* if the 401 error turns out to be written to
     stdout rather than stderr, fall back to `tmux capture-pane -t <name>`
     for pattern detection. Verify empirically during implementation.
@@ -103,13 +105,18 @@ Runs every 5 minutes via LaunchAgent:
 - **Health =** tmux session exists **and** a `run-session.sh` process for that
   session is alive. The presence of a `claude` process is *not* required
   (fixes the false-kill of sessions in their backoff window).
-- Auth-failed sessions (state file present): do **not** kill/restart. Send a
-  macOS notification — "Re-login needed: run `claude /login` on this Mac" —
-  at most once per 6 hours, deduped via the mtime of a notify-marker file in
-  the state dir.
+- **Aliveness wins over auth state:** a dead session is killed and recreated
+  via `start_session` regardless of any auth state file. The state file only
+  suppresses restarts of sessions that are *alive* but auth-failed.
+- Alive auth-failed sessions (state file present): do **not** kill/restart.
+  Send a macOS notification — "Re-login needed: open Terminal on this Mac,
+  run `claude`, then `/login`" — at most once per 6 hours, deduped via the
+  mtime of a notify-marker file in the state dir.
 - Genuinely dead sessions: kill the tmux session and recreate via
   `start_session`. Notify as today.
-- keepawake check and log rotation unchanged.
+- keepawake check unchanged. The monitor log moves to
+  `~/Library/Logs/claude-always-on/monitor.log` (inside the new log dir);
+  rotation policy unchanged.
 
 ### `install.sh` (minor changes)
 
