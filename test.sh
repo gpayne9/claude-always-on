@@ -12,24 +12,11 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONF="$SCRIPT_DIR/sessions.conf"
-
-export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
-
-# Find tmux
-if command -v tmux &>/dev/null; then
-  TMUX="$(command -v tmux)"
-else
-  echo "ERROR: tmux not found. Install with: brew install tmux"
-  exit 1
-fi
-
-# Read session names from config
-SESSIONS=()
-while IFS= read -r line; do
-  [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-  SESSIONS+=("${line%%:*}")
-done < "$CONF"
+source "$SCRIPT_DIR/lib.sh"
+find_tmux || exit 1
+TMUX="$TMUX_BIN"
+read_sessions
+SESSIONS=("${SESSION_NAMES[@]}")
 
 # Refuse to run as root — user-specific checks (tmux, defaults, launchctl)
 # break under sudo because they operate on root's context, not the user's.
@@ -152,30 +139,18 @@ for name in "${SESSIONS[@]}"; do
   fi
   check_pass "tmux session '$name' exists"
 
-  # Check for claude process
-  pane_pid=$("$TMUX" list-panes -t "$name" -F '#{pane_pid}' 2>/dev/null | head -1)
-  if [ -z "$pane_pid" ]; then
-    check_fail "  could not get pane PID for '$name'"
+  if ! session_alive "$name"; then
+    check_fail "  restart loop (run-session.sh) not running in '$name'"
     continue
   fi
+  check_pass "  restart loop alive in '$name'"
 
-  # Search for claude in children and grandchildren
-  found_claude=0
-  if pgrep -P "$pane_pid" -f "claude" > /dev/null 2>&1; then
-    found_claude=1
-  else
-    for cpid in $(pgrep -P "$pane_pid" 2>/dev/null); do
-      if pgrep -P "$cpid" -f "claude" > /dev/null 2>&1; then
-        found_claude=1
-        break
-      fi
-    done
-  fi
-
-  if [ "$found_claude" -eq 1 ]; then
+  if [ -f "$STATE_DIR/$name.auth-failed" ]; then
+    check_warn "  '$name' auth failed — run 'claude', then /login (auto-recovers after)"
+  elif claude_running "$name"; then
     check_pass "  claude process running in '$name'"
   else
-    check_fail "  no claude process found in '$name'"
+    check_warn "  '$name' in backoff — claude not up yet (retries automatically)"
   fi
 done
 
@@ -262,26 +237,13 @@ if [ "${1:-}" = "--simulate" ]; then
     fi
     check_pass "[POST-SLEEP] tmux session '$name' exists"
 
-    pane_pid=$("$TMUX" list-panes -t "$name" -F '#{pane_pid}' 2>/dev/null | head -1)
-    found_claude=0
-    if [ -n "$pane_pid" ]; then
-      if pgrep -P "$pane_pid" -f "claude" > /dev/null 2>&1; then
-        found_claude=1
-      else
-        for cpid in $(pgrep -P "$pane_pid" 2>/dev/null); do
-          if pgrep -P "$cpid" -f "claude" > /dev/null 2>&1; then
-            found_claude=1
-            break
-          fi
-        done
-      fi
-    fi
-
-    if [ "$found_claude" -eq 1 ]; then
-      check_pass "[POST-SLEEP] claude process alive in '$name'"
-    else
-      check_fail "[POST-SLEEP] claude process MISSING in '$name'"
+    if ! session_alive "$name"; then
+      check_fail "[POST-SLEEP] restart loop MISSING in '$name'"
       recheck_fail=1
+    elif claude_running "$name"; then
+      check_pass "[POST-SLEEP] restart loop and claude alive in '$name'"
+    else
+      check_warn "[POST-SLEEP] loop alive in '$name', claude in backoff/auth retry"
     fi
   done
 
