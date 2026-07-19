@@ -8,6 +8,8 @@ Persistent, self-healing [Claude Code](https://code.claude.com/docs/en/overview)
 
 Each repo gets a dedicated `claude remote-control` server running inside a tmux session with an automatic restart loop. A health monitor checks every 5 minutes and recovers anything that died. LaunchAgents start everything on login so it survives reboots.
 
+> **Why is this still needed?** Modern `claude remote-control` (v2.1+) is a persistent multi-session server that auto-reconnects after network drops — but there's still no official daemon/headless mode, and cloud sessions can't touch local files. This repo fills that gap: process supervision, crash recovery, and (new in v2) loud alerts when your claude.ai login expires instead of silent failure.
+
 ## How Remote Control Works
 
 Claude Code's remote control connects a local CLI session to the claude.ai web interface and Claude mobile apps. Your machine runs the session with full filesystem and tool access — the remote device is just a window into it.
@@ -77,8 +79,10 @@ chmod +x start.sh monitor.sh test.sh install.sh uninstall.sh
 | File | Purpose |
 |------|---------|
 | `sessions.conf` | Your repos — one `name:path` per line |
-| `start.sh` | Creates tmux sessions, starts remote control servers, caffeinate, disables App Nap |
-| `monitor.sh` | Health check — verifies sessions every 5 min, restarts dead ones, sends macOS notifications |
+| `lib.sh` | Shared helpers (config parsing, health checks, the single session-creation code path) — sourced by the other scripts |
+| `run-session.sh` | The restart loop that runs inside each tmux session — exponential backoff plus auth-failure detection |
+| `start.sh` | Creates tmux sessions, caffeinate, disables App Nap; `--status` shows per-session health |
+| `monitor.sh` | Health check — verifies the restart loop is alive every 5 min, restarts dead sessions, sends macOS notifications |
 | `test.sh` | Diagnostic — verifies all settings and session health |
 | `install.sh` | Installs LaunchAgents for auto-start on login and monitoring |
 | `uninstall.sh` | Removes LaunchAgents and kills all sessions |
@@ -140,15 +144,30 @@ Verify with `pmset -g custom`.
 The monitor script (`monitor.sh`) runs every 5 minutes via LaunchAgent and checks:
 
 - `keepawake` tmux session exists with a live `caffeinate` process
-- Each session in `sessions.conf` has a running tmux session with a live `claude` process
+- Each configured session has a running tmux session with a live restart loop (`run-session.sh`)
 
-If anything is missing, it restarts only the affected sessions (not all of them) and sends a macOS notification.
+A session with no `claude` process is **not** considered dead — the loop may just be in its backoff window waiting to retry. Genuinely dead sessions are killed and recreated (only the affected ones), with a macOS notification.
 
-View the log:
+**Auth failures are handled specially.** When claude exits with an authentication error (expired claude.ai login → `401 ... Please use /login`), the loop records it, slows retries to every 5 minutes, and the monitor sends a *"Re-login needed"* notification at most once per 6 hours instead of restart-churning. As soon as you run `claude` → `/login` on the machine, the next retry succeeds and everything clears automatically — no manual restarts.
+
+Session status at a glance:
 
 ```bash
-tail -f ~/Library/Logs/claude-always-on.log
+./start.sh --status
+#   ✓ name              running and connected-capable
+#   ↻ name (backoff)    loop alive, waiting to retry claude
+#   ⚠ name (auth failed) re-login needed: run `claude`, then /login
+#   ✗ name              dead (monitor will recover within 5 min)
 ```
+
+View the logs:
+
+```bash
+tail -f ~/Library/Logs/claude-always-on/monitor.log     # monitor decisions
+tail -f ~/Library/Logs/claude-always-on/<name>.log      # a session's claude stderr
+```
+
+Auth/notification state lives in `~/.local/state/claude-always-on/`.
 
 ## Testing
 
@@ -283,6 +302,10 @@ claude auth login
 On **Team or Enterprise plans**, an admin must enable remote control at [claude.ai/admin-settings/claude-code](https://claude.ai/admin-settings/claude-code). If the toggle is grayed out, the org has a data-retention or compliance config incompatible with remote control — contact Anthropic support.
 
 If the error mentions `disableRemoteControl`, an IT admin has blocked it at the device level via managed settings.
+
+### "Re-login needed" notification / `⚠ auth failed` status
+
+Your claude.ai credentials expired. On the machine itself, run `claude`, then `/login`, and complete the browser sign-in. Sessions recover automatically within one retry cycle (≤5 minutes) — verify with `./start.sh --status`.
 
 ### Sessions not showing in Remote Control dropdown
 
