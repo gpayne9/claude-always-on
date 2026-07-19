@@ -9,6 +9,24 @@ LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 
 mkdir -p "$LAUNCH_AGENTS_DIR"
 
+# State and log directories used by run-session.sh / monitor.sh
+mkdir -p "$HOME/.local/state/claude-always-on" "$HOME/Library/Logs/claude-always-on"
+
+# Warn (don't fail) if the claude CLI predates server-mode auto-reconnect.
+version_lt() {
+  local a1 a2 a3 b1 b2 b3
+  IFS=. read -r a1 a2 a3 <<< "$1"
+  IFS=. read -r b1 b2 b3 <<< "$2"
+  if [ "$a1" != "$b1" ]; then [ "$a1" -lt "$b1" ]; return; fi
+  if [ "$a2" != "$b2" ]; then [ "$a2" -lt "$b2" ]; return; fi
+  [ "$a3" -lt "$b3" ]
+}
+claude_ver="$(claude --version 2>/dev/null | awk '{print $1}' || true)"  # || true: don't let set -e/pipefail abort install when claude is absent
+if [ -n "$claude_ver" ] && version_lt "$claude_ver" "2.1.207"; then
+  echo "WARNING: claude CLI $claude_ver is older than 2.1.207 (auto-reconnect)."
+  echo "         Run: claude update"
+fi
+
 # --- Generate and install the start-on-login LaunchAgent ---
 cat > "$LAUNCH_AGENTS_DIR/com.claude.always-on.start.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
